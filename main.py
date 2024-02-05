@@ -12,7 +12,8 @@ def start_server():
         while True:
             # accept a new TCP socket connection
             conn, addr = s.accept()
-            data = conn.recv(100000)
+            print(f'Accepted a new connection from {addr}')
+            data = conn.recv(4096)
             new_context = threading.Thread(target=start_new_connection, args=(conn, addr, data))
             new_context.start()
 
@@ -44,15 +45,46 @@ def extract_host_port(data: str):
         
     return None, None
 
+def extract_content_length(header: bytes):
+    header_lines = header.decode().split('\r\n')
+    for line in header_lines:
+        if line.startswith('Content-Length: '):
+            content_length = int(line.split(': ')[1])
+            return content_length
+        
+    return None
+
 def handle_tunnel(client_socket, target_socket):
     print('handling tunnel')
     # Forward traffic between client and target in both directions
     try:
         # Receive data from the target and forward it to the client
-        target_data = target_socket.recv(1000000)
-        #print(target_data.decode())
-        print(f'received data from the server of length {len(target_data)}')
-        client_socket.sendall(target_data)
+        finished = False
+        all_data = b''
+        while not finished:
+            target_data = target_socket.recv(4096)
+            if not target_data:
+                break
+            all_data += target_data
+            print(f'received data from the server of total length {len(all_data)}')
+            end_header_idx = target_data.find(b'\r\n\r\n')
+
+            if end_header_idx != -1:
+                header = all_data[:end_header_idx+4]
+                print(header)
+                content_length = extract_content_length(header)
+                if not content_length:
+                    break
+                header_length = len(header) # for \r\n\r\n
+                print(header_length)
+                while len(all_data) < header_length + content_length:
+                    target_data = target_socket.recv(4096)
+                    all_data += target_data
+
+                finished = True
+
+        client_socket.sendall(all_data)
+        print(f'received data from the server of total length {len(all_data)}')
         print('forwarded it to destination')
 
     except Exception as e:
