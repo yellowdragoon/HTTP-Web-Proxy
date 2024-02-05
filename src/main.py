@@ -37,6 +37,7 @@ def start_server():
 
 def start_new_connection(conn: socket, addr, data: bytes):
     print(f'Accepted a new connection from {addr}')
+    print(data.decode())
     host, port = extract_host_port(data.decode())
     print(f'Host: {host}, on Port: {port}')
     
