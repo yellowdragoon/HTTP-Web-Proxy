@@ -1,3 +1,15 @@
+def extract_https(data: str):
+    header_block = data.split('\r\n\r\n')[0]
+    header_lines = header_block.split('\r\n')
+    if header_lines[0].startswith('CONNECT'):
+        print('HTTPS Connection request')
+        first_line = header_lines[0].split()
+        address, http_version = first_line[1], first_line[2]
+        address_split = address.split(':')
+        return (address_split[0], address_split[1])
+
+    return None
+
 def extract_host_port(data: str):
     header_block = data.split('\r\n\r\n')[0]
     header_lines = header_block.split('\r\n')

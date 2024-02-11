@@ -3,13 +3,15 @@ import sys
 import threading
 import os
 from dotenv import load_dotenv
-from utils import extract_content_length, extract_host_port
+from utils import extract_content_length, extract_host_port, extract_https
 
 load_dotenv()
 
 MAX_BUFFER_SIZE = int(os.getenv('MAX_BUFFER_SIZE'))
 HOST = os.getenv('HOST')
 PORT = int(os.getenv('PORT'))
+
+forwarding_table = {}
 
 def start_server():
     try:
@@ -37,16 +39,23 @@ def start_server():
 
 def start_new_connection(conn: socket, addr, data: bytes):
     print(f'Accepted a new connection from {addr}')
-    print(data.decode())
-    host, port = extract_host_port(data.decode())
-    print(f'Host: {host}, on Port: {port}')
-    
-    # Establish a tunnel to the target server
-    target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    target.connect((host, port))
-    target.sendall(data)
+    data_str = data.decode()
+    print(data_str)
+    res = extract_https(data_str)
+    if not res:
+        host, port = extract_host_port(data_str)
+        print(f'Host: {host}, on Port: {port}')
+        
+        # Establish a tunnel to the target server
+        target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        target.connect((host, port))
+        target.sendall(data)
 
-    handle_tunnel(conn, target)
+        handle_tunnel(conn, target)
+
+    else:
+        host, port = res[0], res[1]
+        print(res)
 
 def handle_tunnel(client_socket, target_socket):
     print('handling tunnel')
