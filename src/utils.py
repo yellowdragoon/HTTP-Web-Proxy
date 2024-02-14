@@ -6,7 +6,7 @@ def extract_https(data: str):
         first_line = header_lines[0].split()
         address, http_version = first_line[1], first_line[2]
         address_split = address.split(':')
-        return (address_split[0], address_split[1])
+        return (address_split[0], int(address_split[1]))
 
     return None
 

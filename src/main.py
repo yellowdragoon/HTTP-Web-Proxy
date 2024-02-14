@@ -2,6 +2,7 @@ import socket
 import sys
 import threading
 import os
+from collections import defaultdict
 from dotenv import load_dotenv
 from utils import extract_content_length, extract_host_port, extract_https
 
@@ -11,7 +12,7 @@ MAX_BUFFER_SIZE = int(os.getenv('MAX_BUFFER_SIZE'))
 HOST = os.getenv('HOST')
 PORT = int(os.getenv('PORT'))
 
-forwarding_table = {}
+forwarding_table = defaultdict()
 
 def start_server():
     try:
@@ -55,10 +56,67 @@ def start_new_connection(conn: socket, addr, data: bytes):
 
     else:
         host, port = res[0], res[1]
-        print(res)
+        # Establish a tunnel to the target server
+        target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        target.connect((host, port))
+        handle_https_tunnel(conn, target)
+
+def handle_https_tunnel(client_socket, target_socket):
+    print('handling https tunnel')
+    try:
+        response = "HTTP/1.1 200 Connection Established\r\n\r\n"
+        client_socket.sendall(response.encode('utf-8'))
+        while True:
+            finished = False
+            all_data = b''
+            while not finished:
+                target_data = client_socket.recv(MAX_BUFFER_SIZE)
+                if not target_data and all_data == b'':
+                    print('Connection closed')
+                    break
+
+                if not target_data:
+                    finished = True
+
+                else:
+                    all_data += target_data
+            print(f'received data from the client of total length {len(all_data)}')
+
+            target_socket.sendall(all_data)
+            print(f'forwarded to server')
+
+            finished = False
+            all_data = b''
+            while not finished:
+                target_data = target_socket.recv(MAX_BUFFER_SIZE)
+                if not target_data and all_data == b'':
+                    print('Connection closed')
+                    break
+
+                if not target_data:
+                    finished = True
+
+                else:
+                    all_data += target_data
+
+            print(f'received data from the server of total length {len(all_data)}')
+            print(all_data.decode())
+
+            client_socket.sendall(all_data)
+            print(f'forwarded to client')
+
+    except Exception as e:
+        print(f"Error in tunneling: {e}")
+
+    finally:
+        # Close both sockets when done
+        client_socket.close()
+        target_socket.close()
+
+    print('thread is exiting')
 
 def handle_tunnel(client_socket, target_socket):
-    print('handling tunnel')
+    print('handling http tunnel')
     try:
         # Receive data from the target and forward it to the client
         finished = False
