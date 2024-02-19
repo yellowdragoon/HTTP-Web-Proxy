@@ -85,11 +85,6 @@ def handle_https_tunnel(client_socket, target_socket):
 
             except Exception as e:
                 raise e
-        # forwarder = threading.Thread(target=https_tunnel_forwarder, args=(client_socket, target_socket))
-        # forwarder.start()
-        # receiver = threading.Thread(target=https_tunnel_receiver, args=(client_socket, target_socket))
-        # receiver.start()
-        # print("Forwarder and receiver started...")
 
     except Exception as e:
         print(f"Error in tunneling: {e}")
@@ -97,38 +92,6 @@ def handle_https_tunnel(client_socket, target_socket):
     finally:
         client_socket.close()
         target_socket.close()
-
-# Listens to packets from the client socket and forwards it to the destination
-def https_tunnel_forwarder(client_socket, target_socket):
-    while True:
-        try:
-            data = client_socket.recv(MAX_BUFFER_SIZE)
-            if data == b'': 
-                print("Client socket broken")
-                # There should be a nicer way to stop receiver
-                break
-
-            print(f"Sending {len(data)} bytes of data towards the server...")
-            target_socket.sendall(data)
-
-        except Exception as e:
-            print(e)
-
-# Listens to packets from the server socket and forwards it to the client
-def https_tunnel_receiver(client_socket, target_socket):
-    while True:
-        try:
-            data = target_socket.recv(MAX_BUFFER_SIZE)
-            if data == b'': 
-                print("Server socket broken")
-                # There should be a nicer way to stop receiver
-                break
-
-            print(f"Sending {len(data)} bytes of data towards the client...")
-            client_socket.sendall(data)
-
-        except Exception as e:
-            print(e)
 
 def handle_request(client_socket, target_socket):
     print('Handling http request')
