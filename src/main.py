@@ -3,6 +3,7 @@ import socket
 import sys
 import threading
 import os
+import management_console
 from collections import defaultdict
 from dotenv import load_dotenv
 from utils import extract_content_length, extract_host_port, extract_https
@@ -134,5 +135,8 @@ def handle_request(client_socket, target_socket):
     print('Thread is exiting, HTTP request completed')
 
 if __name__ == "__main__":
-    start_server()
+    console = management_console.ManagementConsole()
+    server_thread = threading.Thread(target=start_server, args=())
+    server_thread.start()
+    console.mainloop()
     
