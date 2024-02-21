@@ -3,15 +3,6 @@ from global_state import GlobalState
 import io
 import sys
 
-class TkinterRedirectText(io.TextIOBase):
-    def __init__(self, text_widget):
-        self.text_widget = text_widget
-
-    def write(self, string):
-        self.text_widget.insert(tk.END, string)
-        self.text_widget.see(tk.END)  # Scroll to the end
-
-
 class ManagementConsole(tk.Tk):
     def __init__(self, global_state: GlobalState):
         super().__init__()
@@ -43,10 +34,11 @@ class ManagementConsole(tk.Tk):
         self.output_text = tk.Text(master=self.console_frame, wrap=tk.WORD)
         self.output_text.pack(expand=True, fill=tk.BOTH)
 
-        sys.stdout = TkinterRedirectText(self.output_text)
+        self.connections_text = tk.Text(master=self.console_frame, wrap=tk.WORD)
+        self.connections_text.pack(expand=True, fill=tk.BOTH)
 
         self.blacklist_frame.pack(side=tk.LEFT)
-        self.console_frame.pack(side=tk.LEFT, padx=20, pady=20)
+        self.console_frame.pack(side=tk.LEFT, padx=20, pady=20, expand=True, fill=tk.BOTH)
 
     def add_to_blacklist(self):
         url = self.url_input.get()
@@ -60,6 +52,14 @@ class ManagementConsole(tk.Tk):
         if selected:
             self.global_state.blacklist.remove(self.blacklist_listbox.get(selected))
             self.blacklist_listbox.delete(selected)
+
+    def print_connections(self, str):
+        self.connections_text.insert(tk.END, str + '\n')
+        self.connections_text.see(tk.END)  # Scroll to the end
+
+    def print_transfers(self, str):
+        self.output_text.insert(tk.END, str + '\n')
+        self.output_text.see(tk.END)  # Scroll to the end
 
 # Create an instance of the management console and run the Tkinter event loop
 if __name__ == "__main__":
