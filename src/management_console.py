@@ -1,10 +1,11 @@
 import tkinter as tk
+from global_state import GlobalState
 
 class ManagementConsole(tk.Tk):
-    def __init__(self):
+    def __init__(self, global_state: GlobalState):
         super().__init__()
         self.title("Proxy Management Console")
-        self.blacklist = set()
+        self.global_state = global_state
 
         # Create URL input field and add button
         self.url_input = tk.Entry(self, width=40)
@@ -23,13 +24,13 @@ class ManagementConsole(tk.Tk):
 
     def add_to_blacklist(self):
         url = self.url_input.get()
-        if url not in self.blacklist:
-            self.blacklist.add(url)
+        if url != "" and url not in self.global_state.blacklist:
+            self.global_state.blacklist.add(url)
             self.blacklist_listbox.insert(tk.END, url)
             self.url_input.delete(0, tk.END)  # Clear the input field after adding to blacklist
 
-
 # Create an instance of the management console and run the Tkinter event loop
 if __name__ == "__main__":
-    app = ManagementConsole()
+    state = GlobalState()
+    app = ManagementConsole(state)
     app.mainloop()

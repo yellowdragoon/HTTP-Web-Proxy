@@ -8,12 +8,13 @@ from dotenv import load_dotenv
 from utils import extract_content_length, extract_host_port, extract_https
 
 class ProxyServer():
-    def __init__(self) -> None:
+    def __init__(self, global_state) -> None:
         load_dotenv()
         self.MAX_BUFFER_SIZE = int(os.getenv('MAX_BUFFER_SIZE'))
         self.HOST = os.getenv('HOST')
         self.PORT = int(os.getenv('PORT'))
         self.forwarding_table = defaultdict()
+        self.global_state = global_state
 
     def start_server(self):
         try:
@@ -55,10 +56,12 @@ class ProxyServer():
 
         else:
             host, port = https_result[0], https_result[1]
-            # Establish a tunnel to the target server
-            target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            target.connect((host, port))
-            self.handle_https_tunnel(conn, target)
+            print(host)
+            if host not in self.global_state.blacklist:
+                # Establish a tunnel to the target server
+                target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                target.connect((host, port))
+                self.handle_https_tunnel(conn, target)
 
     def handle_https_tunnel(self, client_socket, target_socket):
         print('Handling https tunnel')
