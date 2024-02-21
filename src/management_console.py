@@ -1,7 +1,5 @@
 import tkinter as tk
 from global_state import GlobalState
-import io
-import sys
 
 class ManagementConsole(tk.Tk):
     def __init__(self, global_state: GlobalState):
@@ -30,36 +28,48 @@ class ManagementConsole(tk.Tk):
         self.delete_button = tk.Button(master=self.blacklist_frame, text="Remove 1 from Blacklist", command=self.delete_1_blacklist)
         self.delete_button.grid(row=3, column=0, columnspan=2, pady=15)
 
-        # Create textfield for the console
+        # Create textfields and labels for the 2 display areas
+        self.output_text_label = tk.Label(master=self.console_frame, text="Byte Flow:", font=("Arial", 12))
+        self.output_text_label.pack()
+
         self.output_text = tk.Text(master=self.console_frame, wrap=tk.WORD)
-        self.output_text.pack(expand=True, fill=tk.BOTH)
+        self.output_text.pack(expand=True, fill=tk.BOTH, pady=(0, 10))
+
+        self.connections_text_label = tk.Label(master=self.console_frame, text="Connection Flow:", font=("Arial", 12))
+        self.connections_text_label.pack()
 
         self.connections_text = tk.Text(master=self.console_frame, wrap=tk.WORD)
         self.connections_text.pack(expand=True, fill=tk.BOTH)
 
+        # Add the 2 frames to the tkinter layout
         self.blacklist_frame.pack(side=tk.LEFT)
-        self.console_frame.pack(side=tk.LEFT, padx=20, pady=20, expand=True, fill=tk.BOTH)
+        self.console_frame.pack(side=tk.LEFT, padx=20, pady=(5, 25), expand=True, fill=tk.BOTH)
 
     def add_to_blacklist(self):
+        """Adds a new url to the blacklist if it doesn't already exist"""
         url = self.url_input.get()
         if url != "" and url not in self.global_state.blacklist:
             self.global_state.blacklist.add(url)
             self.blacklist_listbox.insert(tk.END, url)
-            self.url_input.delete(0, tk.END)  # Clear the input field after adding to blacklist
+            # Clear the input field after adding to blacklist
+            self.url_input.delete(0, tk.END)
 
     def delete_1_blacklist(self):
+        """Deletes the currently selected element from the blacklist"""
         selected = self.blacklist_listbox.curselection()
         if selected:
             self.global_state.blacklist.remove(self.blacklist_listbox.get(selected))
             self.blacklist_listbox.delete(selected)
 
     def print_connections(self, str):
+        """Helper to print to the Connections flow"""
         self.connections_text.insert(tk.END, str + '\n')
-        self.connections_text.see(tk.END)  # Scroll to the end
+        self.connections_text.see(tk.END)
 
     def print_transfers(self, str):
+        """Helper to print to the Byte flow"""
         self.output_text.insert(tk.END, str + '\n')
-        self.output_text.see(tk.END)  # Scroll to the end
+        self.output_text.see(tk.END)
 
 # Create an instance of the management console and run the Tkinter event loop
 if __name__ == "__main__":

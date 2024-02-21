@@ -4,9 +4,8 @@ import sys
 import threading
 import time
 import os
-from collections import defaultdict
 from dotenv import load_dotenv
-from utils import extract_content_length, extract_host_port, extract_https, extract_cache_expiry_time, cache_entry_usable
+from utils import extract_content_length, extract_http, extract_https, extract_cache_expiry_time, cache_entry_usable
 
 class ProxyServer():
     def __init__(self, global_state, management_console) -> None:
@@ -14,7 +13,6 @@ class ProxyServer():
         self.MAX_BUFFER_SIZE = int(os.getenv('MAX_BUFFER_SIZE'))
         self.HOST = os.getenv('HOST')
         self.PORT = int(os.getenv('PORT'))
-        self.forwarding_table = defaultdict()
         self.global_state = global_state
         self.management_console = management_console
         self.http_cache = {}
@@ -49,7 +47,7 @@ class ProxyServer():
         data_str = data.decode()
         https_result = extract_https(data_str)
         if not https_result:
-            host, port = extract_host_port(data_str)
+            host, port = extract_http(data_str)
             self.management_console.print_connections(
                 f'New HTTP request from {addr} to {host}:{port}'
             )
@@ -107,13 +105,13 @@ class ProxyServer():
                     for sock in readable:
                         data = sock.recv(self.MAX_BUFFER_SIZE)
                         if data == b'': 
-                            self.management_console.print_transfers(f"{sock.getpeername()} socket broken")
+                            self.management_console.print_connections(f"{sock.getpeername()} socket broken, closing tunnel")
                             return  # Exit the function gracefully if the socket is closed
 
-                        # self.management_console.print_transfers(
-                        #     f"Sending {len(data)} bytes of data towards the "
-                        #     f"{'server' if sock is client_socket else 'client'}..."
-                        # )
+                        self.management_console.print_transfers(
+                            f"{sock.getpeername()} sent {len(data)} bytes of data towards "
+                            f"{target_socket.getpeername() if sock is client_socket else client_socket.getpeername()}"
+                        )
                         forward_socket = target_socket if sock is client_socket else client_socket
                         forward_socket.sendall(data)
 
@@ -131,8 +129,11 @@ class ProxyServer():
         print('Handling http request')
         try:
             if cache_entry_usable(self.http_cache, host):
-                client_socket.sendall(self.http_cache[host][1])
-                print('Served cached content')
+                all_data = self.http_cache[host][1]
+                client_socket.sendall(all_data)
+                self.management_console.print_transfers(
+                    f'Proxy sent {len(all_data)} cached bytes towards {client_socket.getpeername()}'
+                )
                 return 
             # Receive data from the target and forward it to the client
             finished_receiving = False
@@ -171,7 +172,9 @@ class ProxyServer():
                         print(f'Cache store attempt error: {e}')
 
             client_socket.sendall(all_data)
-            print(f'Received data from the server of total length {len(all_data)}')
+            self.management_console.print_transfers(
+                f'{target_socket.getpeername()} sent {len(all_data)} bytes towards {client_socket.getpeername()}'
+            )
 
         except Exception as e:
             print(f"Error in tunneling: {e}")
