@@ -1,3 +1,5 @@
+import time
+
 def extract_https(data: str):
     header_block = data.split('\r\n\r\n')[0]
     header_lines = header_block.split('\r\n')
@@ -32,3 +34,24 @@ def extract_content_length(header: bytes):
             return content_length
         
     return None
+
+def extract_cache_expiry_time(header: bytes) -> int:
+    header_lines = header.decode().split('\r\n')
+    for line in header_lines:
+        if line.startswith('Cache-Control: '):
+            cache_control = line.split(': ')[1]
+            #print(cache_control)
+            if 'no-store' in cache_control:
+                return 0
+            
+            if 'max-age' in cache_control:
+                max_age = int(cache_control.split('=')[1])
+                return max_age
+        
+    return 0
+        
+def cache_entry_usable(cache, entry) -> bool:
+    if entry not in cache:
+        return False
+    
+    return cache[entry][0] > time.time()
