@@ -28,6 +28,11 @@ class ManagementConsole(tk.Tk):
         self.delete_button = tk.Button(master=self.blacklist_frame, text="Remove 1 from Blacklist", command=self.delete_1_blacklist)
         self.delete_button.grid(row=3, column=0, columnspan=2, pady=15)
 
+        # Create checkbox to enable/disable HTTP caching
+        self.cache_var = tk.BooleanVar()
+        self.cache_checkbox = tk.Checkbutton(master=self.blacklist_frame, text="Enable Caching", variable=self.cache_var, command=self.toggle_cache)
+        self.cache_checkbox.grid(row=4, pady=5)
+
         # Create textfields and labels for the 2 display areas
         self.output_text_label = tk.Label(master=self.console_frame, text="Byte Flow:", font=("Arial", 12))
         self.output_text_label.pack()
@@ -70,6 +75,9 @@ class ManagementConsole(tk.Tk):
         """Helper to print to the Byte flow"""
         self.output_text.insert(tk.END, str + '\n')
         self.output_text.see(tk.END)
+
+    def toggle_cache(self):
+        self.global_state.cache_http = self.cache_var.get()
 
 # Create an instance of the management console and run the Tkinter event loop
 if __name__ == "__main__":

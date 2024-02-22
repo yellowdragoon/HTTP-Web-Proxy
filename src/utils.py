@@ -27,29 +27,43 @@ def extract_http(data: str):
         
     return None
 
-def extract_content_length(header: bytes):
-    """Returns the content length field from the header, or None if it doesn't exist"""
+def extract_content_length(header: bytes) -> int:
+    """Returns the content length field from the header, or 0 if it doesn't exist"""
     header_lines = header.decode().split('\r\n')
     for line in header_lines:
         if line.startswith('Content-Length: '):
             content_length = int(line.split(': ')[1])
             return content_length
         
-    return None
+    return 0
+
+def parse_cache_control(cache_control_header):
+    """Return all directives of the cache-control header, if it exists"""
+    directives = {}
+    if cache_control_header:
+        parts = cache_control_header.split(',')
+        for part in parts:
+            directive, _, value = part.strip().partition('=')
+            directive = directive.strip().lower()
+            value = value.strip(' "')
+            directives[directive] = value if value else None
+    return directives
 
 def extract_cache_expiry_time(header: bytes) -> int:
     """Returns the amount of time the proxy may cache the response for, based on the header"""
     header_lines = header.decode().split('\r\n')
+    directives = {}
     for line in header_lines:
         if line.startswith('Cache-Control: '):
             cache_control = line.split(': ')[1]
-            if 'no-store' in cache_control:
-                return 0
-            
-            if 'max-age' in cache_control:
-                max_age = int(cache_control.split('=')[1])
-                return max_age
-        
+            directives.update(parse_cache_control(cache_control))
+
+    if 'no-store' in directives:
+        return 0
+    
+    if 'max-age' in directives:
+        return int(directives['max-age'])
+
     return 0
         
 def cache_entry_usable(cache, entry) -> bool:

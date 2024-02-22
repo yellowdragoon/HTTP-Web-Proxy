@@ -3,27 +3,21 @@ import socket
 import sys
 import threading
 import time
-import os
-from dotenv import load_dotenv
-from utils import extract_content_length, extract_http, extract_https, extract_cache_expiry_time, cache_entry_usable
+from constants import *
+from utils import *
 
 class ProxyServer():
     def __init__(self, global_state, management_console) -> None:
-        load_dotenv()
-        self.MAX_BUFFER_SIZE = int(os.getenv('MAX_BUFFER_SIZE'))
-        self.HOST = os.getenv('HOST')
-        self.PORT = int(os.getenv('PORT'))
         self.global_state = global_state
         self.management_console = management_console
         self.http_cache = {}
-        self.forbidden_message = "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n403 Forbidden: Access to the requested URL is not allowed.\r\n"
 
     def start_server(self):
         try:
             self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.server.bind((self.HOST, self.PORT))
+            self.server.bind((HOST, PORT))
             self.server.listen()
-            self.management_console.print_connections(f'SUCCESS: server now listening at {self.HOST} on port {self.PORT}')
+            self.management_console.print_connections(f'SUCCESS: server now listening at {HOST} on port {PORT}')
 
         except Exception as e:
             print('ERROR: failed to initialize server.')
@@ -32,9 +26,9 @@ class ProxyServer():
             
         while True:
             try:
-                # Accept a new TCP socket connection
+                # Accept a new TCP socket connection and launch a new worker thread to handle it
                 conn, addr = self.server.accept()
-                data = conn.recv(self.MAX_BUFFER_SIZE)
+                data = conn.recv(MAX_BUFFER_SIZE)
                 new_context = threading.Thread(target=self.start_new_connection, args=(conn, addr, data))
                 new_context.start()
 
@@ -43,15 +37,14 @@ class ProxyServer():
                 print(e)
 
     def start_new_connection(self, conn: socket, addr, data: bytes):
-        #self.management_console.print_connections(f'Accepted a new HTTP connection from {addr}')
         data_str = data.decode()
         https_result = extract_https(data_str)
+        # Parse the request to check if it is a HTTPS request
         if not https_result:
             host, port = extract_http(data_str)
             self.management_console.print_connections(
                 f'New HTTP request from {addr} to {host}:{port}'
             )
-
             if host not in self.global_state.blacklist:
                 # Establish a connection to the target server
                 target = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -63,7 +56,7 @@ class ProxyServer():
                 self.management_console.print_connections(
                     f'HTTP request refused: {host} is in blacklist'
                 )
-                response = self.forbidden_message
+                response = FORBIDDEN_MESSAGE
                 conn.sendall(response.encode('utf-8'))
                 conn.close()
 
@@ -85,28 +78,28 @@ class ProxyServer():
                 self.management_console.print_connections(
                     f'HTTPS connection from {addr} to {host}:{port} refused: {host} is in blacklist'
                 )
-                response = self.forbidden_message
+                response = FORBIDDEN_MESSAGE
                 conn.sendall(response.encode('utf-8'))
                 conn.close()
 
     def handle_https_tunnel(self, client_socket, target_socket):
-        #print('Handling https tunnel')
+        """Handles the HTTPS tunnel created between a client/server"""
         sockets = [client_socket, target_socket]
         try:
             response = "HTTP/1.1 200 Connection Established\r\n\r\n"
             client_socket.sendall(response.encode('utf-8'))
-            #print('Connection Established between client and server')
 
             while True:
                 try:
                     # Use Python select module to wait for activity in one (or both) of the tunnel sockets
                     readable, _, _ = select.select(sockets, [], [])
 
+                    # Forward the data to the correct socket (client/server)
                     for sock in readable:
-                        data = sock.recv(self.MAX_BUFFER_SIZE)
+                        data = sock.recv(MAX_BUFFER_SIZE)
                         if data == b'': 
                             self.management_console.print_connections(f"{sock.getpeername()} socket broken, closing tunnel")
-                            return  # Exit the function gracefully if the socket is closed
+                            return
 
                         self.management_console.print_transfers(
                             f"{sock.getpeername()} sent {len(data)} bytes of data towards "
@@ -119,54 +112,56 @@ class ProxyServer():
                     raise e
 
         except Exception as e:
-            print(f"Error in tunneling: {e}")
+            print(f"Error in HTTPS tunneling: {e}")
 
         finally:
+            # Always be sure to close both sockets before thread terminates
             client_socket.close()
             target_socket.close()
 
     def handle_request(self, client_socket, target_socket, host):
-        print('Handling http request')
+        """Handles a stateless HTTP request"""
         try:
-            if cache_entry_usable(self.http_cache, host):
+            # Check if request is already cached
+            if self.global_state.cache_http and cache_entry_usable(self.http_cache, host):
                 all_data = self.http_cache[host][1]
                 client_socket.sendall(all_data)
                 self.management_console.print_transfers(
                     f'Proxy sent {len(all_data)} cached bytes towards {client_socket.getpeername()}'
                 )
                 return 
-            # Receive data from the target and forward it to the client
+            
             finished_receiving = False
             all_data = b''
+            # Receive all of the response from the server
             while not finished_receiving:
-                target_data = target_socket.recv(self.MAX_BUFFER_SIZE)
+                target_data = target_socket.recv(MAX_BUFFER_SIZE)
                 if not target_data:
                     break
 
                 all_data += target_data
                 end_header_idx = target_data.find(b'\r\n\r\n')
-
                 # Found end of header
                 if end_header_idx != -1:
                     header = all_data[:end_header_idx+4]
-                    print(header)
                     header_length = len(header)
                     content_length = extract_content_length(header)
 
                     while len(all_data) < header_length + content_length:
                         # Receive the remaining data
-                        target_data = target_socket.recv(self.MAX_BUFFER_SIZE)
+                        target_data = target_socket.recv(MAX_BUFFER_SIZE)
                         all_data += target_data
 
                     finished_receiving = True
+                    # Try storing response in cache
                     try:
-                        cache_time = extract_cache_expiry_time(header)
-                        print(cache_time)
-                        if cache_time > 0:
-                            expiry_time = int(time.time()) + cache_time
-                            self.http_cache[host] = (expiry_time, all_data)
-                            print('Response cached')
-                            #print(self.http_cache)
+                        if self.global_state.cache_http:
+                            cache_time = extract_cache_expiry_time(header)
+                            print(cache_time)
+                            if cache_time > 0:
+                                expiry_time = int(time.time()) + cache_time
+                                self.http_cache[host] = (expiry_time, all_data)
+                                print('Response cached')
 
                     except Exception as e:
                         print(f'Cache store attempt error: {e}')
@@ -177,17 +172,14 @@ class ProxyServer():
             )
 
         except Exception as e:
-            print(f"Error in tunneling: {e}")
+            print(f"Error in HTTP tunneling: {e}")
 
         finally:
-            # Close both sockets when done
+            # Always be sure to close both sockets before thread terminates
             client_socket.close()
             target_socket.close()
-            print('Thread is exiting, HTTP request completed')
 
 if __name__ == "__main__":
     proxy = ProxyServer()
     server_thread = threading.Thread(target=proxy.start_server, args=())
     server_thread.start()
-
-    
